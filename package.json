@@ -6,9 +6,17 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-reporter=spec",
+    "lint": "eslint src/features/feature02.js test scripts",
+    "format:check": "prettier --check src/features/feature02.js test scripts eslint.config.js package.json package-lock.json .github/workflows",
+    "test:smoke": "node scripts/smoke.js"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "eslint": "10.16.0",
+    "prettier": "3.10.1"
   }
 }

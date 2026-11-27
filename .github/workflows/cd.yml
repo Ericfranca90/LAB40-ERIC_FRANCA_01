@@ -1,0 +1,54 @@
+name: CD simulado LAB40
+
+on:
+  workflow_run:
+    workflows: [CI LAB40]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  entregar:
+    name: Disponibilizar imagem e registro de entrega
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      IMAGE: lab40:feature02-${{ github.event.workflow_run.head_sha }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      SOURCE_REPO: ${{ github.repository }}
+      CI_RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Baixar imagem aprovada no CI da main
+        uses: actions/download-artifact@v8
+        with:
+          name: lab40-image-${{ github.event.workflow_run.head_sha }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Conferir imagem e registrar entrega simulada
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker load --input lab40-feature02.tar
+          docker image inspect "$IMAGE" --format '{{.Id}}'
+          {
+            printf 'repository=%s\n' "$SOURCE_REPO"
+            printf 'ref=refs/heads/main\n'
+            printf 'sha=%s\n' "$SOURCE_SHA"
+            printf 'image=%s\n' "$IMAGE"
+            printf 'ci_run_id=%s\n' "$CI_RUN_ID"
+            printf 'delivery=simulated\n'
+          } > deployment-record.txt
+          cat deployment-record.txt
+      - name: Disponibilizar imagem e registro
+        uses: actions/upload-artifact@v7
+        with:
+          name: lab40-delivery-record
+          path: |
+            lab40-feature02.tar
+            deployment-record.txt
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,62 @@
+name: CI LAB40
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    name: Qualidade testes e imagem Docker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      IMAGE: lab40:feature02-${{ github.sha }}
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Preparar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci
+      - name: Verificar formatação
+        run: npm run format:check
+      - name: Análise estática
+        run: npm run lint
+      - name: Executar testes unitários e de integração
+        run: npm test
+      - name: Auditoria de dependências
+        run: npm audit --audit-level=high
+      - name: Smoke test
+        run: npm run test:smoke
+      - name: Construir imagem Docker
+        run: |
+          docker build --pull --tag "$IMAGE" .
+          docker image inspect "$IMAGE" --format '{{.Id}}'
+      - name: Executar contêiner e testar API
+        shell: bash
+        run: |
+          set -euo pipefail
+          container=$(docker run -d -p 127.0.0.1::3000 "$IMAGE")
+          trap 'docker logs "$container"; docker rm -f "$container" >/dev/null' EXIT
+          docker ps --filter "id=$container"
+          endereco=$(docker port "$container" 3000/tcp)
+          curl --fail --retry 10 --retry-all-errors --retry-delay 1 --max-time 3 "http://$endereco/health"
+          BASE_URL="http://$endereco" npm run test:smoke
+      - name: Exportar imagem
+        run: docker save "$IMAGE" --output lab40-feature02.tar
+      - name: Armazenar imagem como artefato
+        uses: actions/upload-artifact@v7
+        with:
+          name: lab40-image-${{ github.sha }}
+          path: lab40-feature02.tar
+          if-no-files-found: error
+          retention-days: 7
